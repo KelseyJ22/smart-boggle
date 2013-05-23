@@ -1,0 +1,428 @@
+/*
+ * File: Boggle.cpp
+ * ----------------
+ * Name: Kelsey Josund
+ * Section: Brett Wines
+ * This file is the main starter file for Assignment #4, Boggle.
+ * Plays a game of Boggle in which the computer recursively searches
+ * the gameboard for all potential words to be used in play. Checks a
+ * human player's entry using a separate recursive implementation.
+ */
+ 
+#include <iostream>
+#include "gboggle.h"
+#include "grid.h"
+#include "gwindow.h"
+#include "lexicon.h"
+#include "random.h"
+#include "simpio.h"
+#include "grid.h"
+using namespace std;
+
+/* Constants */
+
+const int BOGGLE_WINDOW_WIDTH = 650;
+const int BOGGLE_WINDOW_HEIGHT = 350;
+//size of the STANDARD_CUBE array
+const int STANDARD_CUBE_SIZE = 16;
+const int NUM_ROWS_COLS = 4;
+const int MIN_WORD_LENGTH = 4;
+const int NUM_CUBE_SIDES = 5;
+
+const string STANDARD_CUBES[16]  = {
+    "AAEEGN", "ABBJOO", "ACHOPS", "AFFKPS",
+    "AOOTTW", "CIMOTU", "DEILRX", "DELRVY",
+    "DISTTY", "EEGHNW", "EEINSU", "EHRTVW",
+    "EIOSST", "ELRTTY", "HIMNQU", "HLNNRZ"
+};
+ 
+const string BIG_BOGGLE_CUBES[25]  = {
+    "AAAFRS", "AAEEEE", "AAFIRS", "ADENNN", "AEEEEM",
+    "AEEGMU", "AEGMNN", "AFIRSY", "BJKQXZ", "CCNSTW",
+    "CEIILT", "CEILPT", "CEIPST", "DDLNOR", "DDHNOT",
+    "DHHLOR", "DHLNOR", "EIIITT", "EMOTTT", "ENSSSU",
+    "FIPRSY", "GORRVW", "HIPRRY", "NOOTUW", "OOOTTU"
+};
+
+struct coordinates{
+    int row;
+    int col;
+};
+
+/*
+ * Function: welcome
+ * Usage: welcome();
+ * -----------------
+ * Print out a cheery welcome message.
+ */
+
+void welcome() {
+    cout << "Welcome!  You're about to play an intense game ";
+    cout << "of mind-numbing Boggle.  The good news is that ";
+    cout << "you might improve your vocabulary a bit.  The ";
+    cout << "bad news is that you're probably going to lose ";
+    cout << "miserably to this little dictionary-toting hunk ";
+    cout << "of silicon.  If only YOU had a gig of RAM..." << endl << endl;
+}
+
+/*
+ * Function: giveInstructions
+ * Usage: giveInstructions();
+ * --------------------------
+ * Print out the instructions for the user.
+ */
+
+void giveInstructions() {
+    cout << endl;
+    cout << "The boggle board is a grid onto which I ";
+    cout << "will randomly distribute cubes. These ";
+    cout << "6-sided cubes have letters rather than ";
+    cout << "numbers on the faces, creating a grid of ";
+    cout << "letters on which you try to form words. ";
+    cout << "You go first, entering all the words you can ";
+    cout << "find that are formed by tracing adjoining ";
+    cout << "letters. Two letters adjoin if they are next ";
+    cout << "to each other horizontally, vertically, or ";
+    cout << "diagonally. A letter can only be used once ";
+    cout << "in each word. Words must be at least four ";
+    cout << "letters long and can be counted only once. ";
+    cout << "You score points based on word length: a ";
+    cout << "4-letter word is worth 1 point, 5-letters ";
+    cout << "earn 2 points, and so on. After your puny ";
+    cout << "brain is exhausted, I, the supercomputer, ";
+    cout << "will find all the remaining words and double ";
+    cout << "or triple your paltry score." << endl << endl;
+    cout << "Hit return when you're ready...";
+    getLine();
+}
+
+/*
+ * Function: placeChars
+ * Usage: placeChars(string);
+ * -------------------------
+ * Locates the characters of a forced cube.
+ */
+
+Grid<char> placeChars(string forcedChars){
+    Grid<char> boardLayout(NUM_ROWS_COLS, NUM_ROWS_COLS);
+    //places all the forced characters in order
+    int index = 0;
+    for (int j = 0; j <= NUM_ROWS_COLS - 1; j++){
+        for (int k = 0; k <= NUM_ROWS_COLS - 1; k++){
+            //works through the rows and columns of the
+            labelCube(j, k, forcedChars[index]);
+            boardLayout.set(j, k, forcedChars[index]);
+            index++;
+        }
+    }
+    return boardLayout;
+}
+
+/*
+ * Function: forceBoard
+ * Usage: forceBoard();
+ * -------------------------
+ * Option for the human user to create an ideal environment in 
+ * which to play the game.
+ */
+Grid<char> forceBoard(){
+    cout << "Great! Apparently you like cheating. Now enter ";
+    cout << "sixteen letters with no spaces in order of where ";
+    cout << "you want them to appear,  starting with the right";
+    cout << "corner and moving down and left as you go. " << endl;
+    string forcedChars = getLine();
+    Grid<char> boardLayout = placeChars(forcedChars);
+    return boardLayout;
+}
+
+bool forceOrNot(){
+    cout << "Would you like to force the board layout? This ";
+    cout << "will make the game a little easier and is great ";
+    cout << "for testing functionality , but you'll probably ";
+    cout << "still lose. Enter y or n: " << endl;
+    if(getLine() == "y"){
+        return true;
+    }
+    return false;
+}
+
+/*
+ * Function: shuffleBoard
+ * Usage: shuffleBoard();
+ * -------------------------
+ * Shuffles the letters provided by the cube rows randomly by copying them
+ * to a Vector and shuffling the vector through use of a random generator
+ * and indices, then applies the shuffled cubes to the display and the gameboard Grid
+ */
+Grid<char> shuffleBoard() {
+    Vector<string> cubeOutput;
+    Grid<char> boardLayout(NUM_ROWS_COLS, NUM_ROWS_COLS);
+    //prints the characters of the STANDARD_CUBES to a single Vector
+    for (int i = 0; i < STANDARD_CUBE_SIZE; i++){
+        cubeOutput.add(STANDARD_CUBES[i]);
+    }
+    //
+    for (int i = 0; i < cubeOutput.size(); i++) {
+        //randomly shuffles the order of cube rows in the Vector
+        int r = randomInteger(i, cubeOutput.size()-1);
+        string temp;
+        temp = cubeOutput.get(r);
+        cubeOutput[r] = cubeOutput.get(i);
+        cubeOutput[i] = temp;
+    }
+    //prints out the newly shuffled Vector by working through the Vector
+    //and the rows and columns of the board to place each letter accordingly
+    int cube = 0;
+    for(int row = 0; row < NUM_ROWS_COLS; row++){
+        for(int col = 0; col < NUM_ROWS_COLS; col++){
+            int r = randomInteger(0, NUM_CUBE_SIDES);
+            labelCube(row, col, cubeOutput.get(cube)[r]);
+            boardLayout.set(row, col, cubeOutput.get(cube)[r]);
+            cube++;
+            }
+        }
+    return boardLayout;
+}
+
+/*
+ * Function: recIsPresent
+ * Usage: recIsPresent(string, Grid<char>, int, int);
+ * -------------------------
+ * HUMAN Recursively checks for a word's presence on the gameboard. Starts with a letter
+ * at a given (row, col) coordinate, then checks in each of the eight connecting
+ * directions for the presence of the second letter, and so on through the word.
+ */
+bool recIsPresent(string word, Grid<char> boardLayout, int row, int col){
+    highlightCube(row, col, true);
+    pause(100);
+    highlightCube(row, col, false);
+    
+    //base cases
+    if(boardLayout[row][col] != word[0]) {
+        return false;
+    }
+    if(word.length() == 1){
+        return true;
+    }
+    //check one element in each of 8 directions
+    else{
+        for(int i = row - 1; i <= row + 1; i++){
+            for(int j = col - 1; j <= col + 1; j++){
+                if((i != row || j != col) && boardLayout.inBounds(i, j)){
+                    if(recIsPresent(word.substr(1), boardLayout, i, j)){
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+/*
+ * Function: isPresentOnBoard
+ * Usage: isPresentOnBoard(string, Grid<chard>);
+ * -------------------------
+ * HUMAN Loops through all potential (row, col) coordinates on the gameboard
+ * and begins the recursive call if the first letter of the entered
+ * word is found at that position. Serves as a wrapper function for
+ * recIsPresent().
+ */
+bool isPresentOnBoard(string word, Grid<char> boardLayout){
+    for (int row = 0; row < NUM_ROWS_COLS; row++){
+        for (int col = 0; col < NUM_ROWS_COLS; col++){
+            if (boardLayout[row][col] == word[0]){
+                if(recIsPresent(word, boardLayout, row, col)){
+                    return true;
+                
+                }
+            }
+        }
+    }
+    return false;
+}
+
+/*
+ * Function: playersTurn
+ * Usage: playersTurn();
+ * -------------------------
+ * Runs the human's turn at the game. Interacts with the user via
+ * a while loop that accepts a word input if it is an English word,
+ * not a duplicate, long enough (at least four characters), and present
+ * on the game board per the isPresentOnBoard function. Stores the words
+ * that have been used in a Vector<string>.
+ */
+void humanTurn(Grid<char> boardLayout, Lexicon& lex){
+    cout << "Your turn now! Enter any words you can find on the board. ";
+    cout << "When you're done, hit Enter an extra time to let us know. " << endl;
+    Set<string> enteredWords;
+    
+    while(true){
+        string word = getLine();
+        if(word == ""){
+            break;
+        }
+        else if (!lex.contains(word)) {
+            cout << "Come on now! That's not a real word (at least not in ";
+            cout << "English). Keep trying, better luck next time. " << endl;
+        }
+        else if (enteredWords.contains(word)){
+            cout << "Now you're starting to repeat yourself. You know what ";
+            cout << "they say about insanity: it's doing the same thing ";
+            cout << "many times and expecting different results... " << endl;
+        }
+        else if (word.length() < MIN_WORD_LENGTH){
+            cout << "That word is so short it barely counts as a word. In ";
+            cout << "fact, for our purposes it doesn't. Guess again. " << endl;
+        }
+        //only collects words that match the length, English, and newness criteria
+        else {
+            enteredWords.add(word);
+            if(isPresentOnBoard(word, boardLayout)){
+                recordWordForPlayer(word, HUMAN);
+            }
+        }
+    }
+}
+
+/*
+ * Function: contains
+ * Usage: contains(coordinates, Vector<coordinates>);
+ * -------------------------
+ * Creates a method for checking contents of a Vector (as in Set).
+ * (I created this as a work-around when I was getting the ugly error
+ * with the Set, and just kept it).
+ */
+
+bool contains (coordinates coor, Vector<coordinates> coordinateList){
+    for(int i = 0; i < coordinateList.size(); i++){
+        if(coor.row == coordinateList[i].row && coor.col == coordinateList[i].col){
+            return true;
+        }
+    }
+    return false;
+}
+
+/*
+ * Function: showPath
+ * Usage: showPath(Vector<coordinates>);
+ * -------------------------
+ * Highlights words being checked as the computer searches. Illuminates
+ * each possible answer as it goes rather than just successful ones at
+ * the end.
+ */
+
+void showPath(Vector<coordinates> usedCoordinates){
+    foreach(coordinates coor in usedCoordinates){
+        highlightCube(coor.row, coor.col, true);
+    }
+    pause(200);
+    foreach(coordinates coor in usedCoordinates){
+        highlightCube(coor.row, coor.col, false);
+    }
+}
+
+/*
+ * Function: canFindWord
+ * Usage: canFindWord(int, int, Grid<char>, string&, Lexicon&);
+ * -------------------------
+ * COMPUTER Recursively looks through the gameboard for a word that is gradually
+ * built through use of the .containsPrefix function on the Lexicon of all
+ * English words. Checks in each of the eight directions from a given letter
+ * in order to check all potential manners of forming a word beginning at
+ * any point on the board.
+ */
+
+void findWords(int row, int col, Grid<char>& boardLayout, string currWord, Lexicon& lex, Vector<coordinates> usedCoordinates, Set<string>& wordSet) {
+    
+    cout << currWord << endl;
+    
+    coordinates currCoor;
+    currCoor.row = row;
+    currCoor.col = col;
+    
+    //base cases
+    if(contains(currCoor, usedCoordinates)) return;
+    if(!lex.containsPrefix(currWord)) return;
+    
+    usedCoordinates.add(currCoor);
+    showPath(usedCoordinates);
+    
+    if(lex.contains(currWord) && currWord.size() >= MIN_WORD_LENGTH) {
+        wordSet.add(currWord);
+    }
+    for(int i = row - 1; i <= row + 1; i++){
+        for(int j = col - 1; j <= col + 1; j++){
+            //avoids out of bounds exception
+            if(boardLayout.inBounds(i, j)){
+                string nextWord = currWord + boardLayout.get(i, j);
+                findWords(i, j, boardLayout, nextWord, lex, usedCoordinates, wordSet);
+            }
+        }
+    }
+    return;
+}
+
+/*
+ * Function: computerTurn
+ * Usage: computerTurn(Grid<char>, Lexicon&);
+ * -------------------------
+ * Runs the computer's turn in gameplay by searching the board for
+ * all potentially found words generated by the shuffle in this
+ * particular instance.
+ */
+void computerTurn(Grid<char> boardLayout, Lexicon& lex){
+    Set<string> wordSet;
+    for(int row = 0; row < NUM_ROWS_COLS; row++){
+        for(int col = 0; col < NUM_ROWS_COLS; col++){
+            //creates a new currWord for each (row, col) position on the board
+            string currWord;
+            currWord += boardLayout[row][col];
+            
+            Vector<coordinates> usedCoordinates;
+            
+            //wordSet is an outparamater to be updated by the canFindWord function
+            findWords(row, col, boardLayout, currWord, lex, usedCoordinates, wordSet);
+        }
+    }
+    foreach(string word in wordSet){
+        recordWordForPlayer(word, COMPUTER);
+    }
+}
+
+bool continuePlaying(){
+    cout << "Would you like to continue playing? Enter y for yes." << endl;
+    string answer = getLine();
+    if(answer == "y") return true;
+    else return false;
+}
+
+/*
+ * Function: main
+ * Usage: main();
+ * -------------------------
+ * Main function that plays the game.
+ */
+int main() {
+    GWindow gw(BOGGLE_WINDOW_WIDTH, BOGGLE_WINDOW_HEIGHT);
+    Grid<char> boardLayout;
+    Lexicon lex("EnglishWords.dat");
+    
+    initGBoggle(gw);
+    drawBoard(NUM_ROWS_COLS, NUM_ROWS_COLS);
+    welcome();
+    giveInstructions();
+    
+    while(true){
+        bool force = forceOrNot();
+        if(!force){
+            boardLayout = shuffleBoard();
+        }
+        else boardLayout = forceBoard();
+    
+        humanTurn(boardLayout, lex);
+        computerTurn(boardLayout, lex);
+        if(!continuePlaying()) break;
+    }
+    return 0;
+}
